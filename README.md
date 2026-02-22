@@ -1,6 +1,16 @@
 ## Setup
 
-1. Configure os IDs do host no `.env` (evita problemas de permissao em arquivos criados no container):
+1. Suba o ambiente:
+```bash
+docker compose up -d --build
+```
+
+2. Copie o arquivo de ambiente (via container):
+```bash
+docker compose exec laravel.test cp .env.example .env
+```
+
+3. (Opcional) Configure os IDs do host no `.env` (evita problemas de permissao em arquivos criados no container):
 ```bash
 id -u
 id -g
@@ -12,22 +22,22 @@ WWWUSER=1000
 WWWGROUP=1000
 ```
 
-2. Suba o ambiente:
+Se alterar esses valores, recrie o container para aplicar:
 ```bash
-docker compose up -d --build
+docker compose up -d --build --force-recreate
 ```
 
-3. Instale dependencias (caso ainda nao tenha feito):
+4. Instale dependencias (caso ainda nao tenha feito):
 ```bash
 docker compose exec laravel.test composer install
 ```
 
-4. Gere a chave da aplicacao:
+5. Gere a chave da aplicacao:
 ```bash
 docker compose exec laravel.test php artisan key:generate
 ```
 
-5. Rode as migrations:
+6. Rode as migrations:
 ```bash
 docker compose exec laravel.test php artisan migrate
 ```
