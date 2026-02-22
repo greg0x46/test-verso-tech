@@ -15,6 +15,17 @@ fi
 
 chmod -R ugo+rw /.composer
 
+# Keep Laravel writable paths aligned with the runtime user.
+if [ -d /var/www/html/storage ]; then
+    chown -R sail:sail /var/www/html/storage || true
+    chmod -R ug+rwX /var/www/html/storage || true
+fi
+
+if [ -d /var/www/html/bootstrap/cache ]; then
+    chown -R sail:sail /var/www/html/bootstrap/cache || true
+    chmod -R ug+rwX /var/www/html/bootstrap/cache || true
+fi
+
 if [ "$DB_CONNECTION" = "sqlite" ]; then
     SQLITE_DB_PATH="${DB_DATABASE:-/var/www/html/database/database.sqlite}"
 
@@ -26,6 +37,8 @@ if [ "$DB_CONNECTION" = "sqlite" ]; then
 
         mkdir -p "$(dirname "$SQLITE_DB_PATH")"
         touch "$SQLITE_DB_PATH"
+        chown sail:sail "$(dirname "$SQLITE_DB_PATH")" "$SQLITE_DB_PATH" || true
+        chmod ug+rwx "$(dirname "$SQLITE_DB_PATH")" || true
         chmod ug+rw "$SQLITE_DB_PATH" || true
     fi
 fi
