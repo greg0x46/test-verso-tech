@@ -1,5 +1,5 @@
 CREATE TABLE produtos_base (
-                               prod_id SERIAL PRIMARY KEY,
+                               prod_id INTEGER PRIMARY KEY AUTOINCREMENT,
                                prod_cod VARCHAR(30),
                                prod_nome VARCHAR(150),
                                prod_cat VARCHAR(50),
@@ -35,7 +35,7 @@ INSERT INTO produtos_base (
       ('PRD012', 'Water Cooler 240mm', 'COMPONENTES', 'REFRIAMENTO', 'Radiador duplo, RGB', 'CoolFlow', 'CF-W240', 'Preto', '1.1kg', '27.5cm', '12cm', '5.2cm', 'UN', FALSE, '2024/03/18');
 
 CREATE TABLE precos_base (
-                             preco_id SERIAL PRIMARY KEY,
+                             preco_id INTEGER PRIMARY KEY AUTOINCREMENT,
                              prc_cod_prod VARCHAR(30),
                              prc_valor TEXT,
                              prc_moeda VARCHAR(10),

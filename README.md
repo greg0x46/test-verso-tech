@@ -40,8 +40,12 @@ docker compose exec laravel.test php artisan migrate
 - Embora um dos requisitos seja utilizar o arquivo ``docker-compose.yml`` aqui estou usando ele como ``compose.yaml`` que é o padrão recomendado nas versões mais recentes.
 - Pela praticidade e por se tratar de um ambiente de desenvolvimento aproveitei as imagens do laravel sail para montar o ambiente, apenas customizei o ``docker/8.5/start-container`` para criar nosso SQLite, dessa forma é possível usar tanto o ``docker compose`` diretamente quanto o utilitário do ``sail``. Em ambientes produtivos teria uma outra abordagem utilizando multi-staging building. 
 
-#### Migrations
+#### Load dump SQL
 
+- O dump `database/dumps/base_scripts.sql` foi ajustado para SQLite nos campos de chave primaria:
+  - `prod_id SERIAL PRIMARY KEY` -> `prod_id INTEGER PRIMARY KEY AUTOINCREMENT`
+  - `preco_id SERIAL PRIMARY KEY` -> `preco_id INTEGER PRIMARY KEY AUTOINCREMENT`
+- Motivo: em SQLite, `SERIAL` nao gera auto incremento como no PostgreSQL, o que deixava `prod_id` e `preco_id` como `NULL` apos os inserts. Com `INTEGER PRIMARY KEY AUTOINCREMENT`, os IDs passam a ser preenchidos automaticamente.
 
 - Eu poderia separar o arquivo `base_scripts.sql` em migrations e seeders, porém optei por executá-lo diretamente na migration pelos seguintes motivos:
 
