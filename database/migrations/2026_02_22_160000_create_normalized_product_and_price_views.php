@@ -83,13 +83,7 @@ return new class extends Migration
                 SELECT
                     preco_id,
                     codigo_produto,
-                    CASE
-                        WHEN valor_txt IS NULL OR valor_txt = '' THEN NULL
-                        WHEN LOWER(REPLACE(valor_txt, ' ', '')) = 'sempreco' THEN NULL
-                        WHEN instr(valor_txt, '.') > 0 AND instr(valor_txt, ',') > 0 THEN CAST(REPLACE(REPLACE(valor_txt, '.', ''), ',', '.') AS REAL)
-                        WHEN instr(valor_txt, ',') > 0 THEN CAST(REPLACE(valor_txt, ',', '.') AS REAL)
-                        ELSE CAST(valor_txt AS REAL)
-                    END AS valor,
+                    normalize_money(valor_txt) AS valor,
                     moeda,
                     CASE
                         WHEN desconto_txt IS NULL OR desconto_txt = '' THEN 0
@@ -103,12 +97,7 @@ return new class extends Migration
                         WHEN CAST(REPLACE(acrescimo_txt, ',', '.') AS REAL) > 1 THEN CAST(REPLACE(acrescimo_txt, ',', '.') AS REAL) / 100.0
                         ELSE CAST(REPLACE(acrescimo_txt, ',', '.') AS REAL)
                     END AS acrescimo_percentual,
-                    CASE
-                        WHEN valor_promocional_txt IS NULL OR valor_promocional_txt = '' THEN NULL
-                        WHEN instr(valor_promocional_txt, '.') > 0 AND instr(valor_promocional_txt, ',') > 0 THEN CAST(REPLACE(REPLACE(valor_promocional_txt, '.', ''), ',', '.') AS REAL)
-                        WHEN instr(valor_promocional_txt, ',') > 0 THEN CAST(REPLACE(valor_promocional_txt, ',', '.') AS REAL)
-                        ELSE CAST(valor_promocional_txt AS REAL)
-                    END AS valor_promocional,
+                    normalize_money(valor_promocional_txt) AS valor_promocional,
                     data_inicio_promocao_txt,
                     data_fim_promocao_txt,
                     data_atualizacao_txt,
@@ -136,7 +125,10 @@ return new class extends Migration
                 p.vendedor_responsavel,
                 p.observacao
             FROM precos_normalizados p
-            INNER JOIN vw_produtos pr ON pr.codigo_produto = p.codigo_produto
+            INNER JOIN (
+                SELECT DISTINCT codigo_produto
+                FROM vw_produtos
+            ) pr ON pr.codigo_produto = p.codigo_produto
         SQL);
     }
 
