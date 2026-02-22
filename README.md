@@ -32,6 +32,12 @@ docker compose exec laravel.test php artisan key:generate
 docker compose exec laravel.test php artisan migrate
 ```
 
+## Documentacao da API
+
+- OpenAPI (arquivo): [`public/openapi.yaml`](public/openapi.yaml)
+- OpenAPI (servido pela aplicacao): [`/openapi.yaml`](/openapi.yaml)
+- ReDoc (pagina publica): [`/api/docs`](/api/docs)
+
 ## Decision Notes
 
 
@@ -66,8 +72,8 @@ docker compose exec laravel.test php artisan migrate
 #### Destination tables and API wiring
 
 - Foram criadas tabelas de destino normalizadas em `database/migrations/2026_02_22_161000_create_normalized_destination_tables.php` para desacoplar ingestao/sincronizacao das tabelas base.
-- Em `produto_insercao`, foram aplicadas unicidades em `produto_origem_id` e `codigo_produto` para reforcar a regra de 1 registro por produto consolidado; `produto_origem_id` foi definido como `unsignedBigInteger` para acomodar IDs de origem altos.
-- Em `preco_insercao`, foi usada unicidade em `preco_origem_id` (tambem como `unsignedBigInteger`), FK com `cascadeOnDelete` para manter integridade quando um produto sincronizado deixa de existir, e `valor`/`valor_promocional` como `nullable` para suportar origem sem valor numerico.
+- Em `produto_insercao`, foram aplicadas unicidades em `produto_origem_id` e `codigo_produto` para reforcar a regra de 1 registro por produto consolidado; `produto_origem_id`;
+- Em `preco_insercao`, foi usada unicidade em `preco_origem_id`, FK com `cascadeOnDelete` para manter integridade quando um produto sincronizado deixa de existir, e `valor`/`valor_promocional` como `nullable` para suportar origem sem valor numerico.
 - Os endpoints foram isolados em `routes/api.php` e registrados em `bootstrap/app.php`, mantendo separacao clara entre rotas web e API.
 
 #### Sync
@@ -80,8 +86,6 @@ docker compose exec laravel.test php artisan migrate
   - **Consistencia transacional**: contadores e escrita acontecem no mesmo contexto, evitando resposta da API divergente do estado persistido.
   - **Regra de negocio fiel**: suporta consolidacao de produtos duplicados por `codigo_produto` e merge de precos para o produto consolidado.
   - **Idempotencia real**: o `DO UPDATE` so roda quando houve mudanca de campo, preservando `updated_at` e evitando escrita desnecessaria.
-- Quando uma solucao simples com loop faria sentido:
-  - dataset pequeno, sem deduplicacao/merge entre entidades, sem necessidade de contadores consistentes em transacao unica e com baixa concorrencia.
 - O fluxo de sync para produtos e precos segue o mesmo padrao:
   - calcula contadores (`processados`, `inseridos`, `atualizados`, `removidos`);
   - remove registros que nao existem mais na origem (`DELETE` por diferenca);
@@ -95,7 +99,7 @@ docker compose exec laravel.test php artisan migrate
 - No SQLite, foi adicionado `WHERE 1 = 1` antes de `ON CONFLICT` nas instrucoes `INSERT ... SELECT` para evitar erro de parser observado com essa combinacao.
 - Foi adicionado lock de sincronizacao com `Cache::lock('sync:catalog', 300)` no controller para evitar overlap entre chamadas concorrentes de produtos e precos; quando o lock esta ocupado a API responde `409`.
 - O controller tambem ganhou tratamento explicito de falhas de sincronizacao com retorno generico `500` e `report()` para observabilidade.
-- Os contadores de sincronizacao (`processados`, `inseridos`, `atualizados`, `removidos`) passaram a ser calculados no mesmo contexto transacional das operacoes de escrita, reduzindo chance de divergencia entre retorno da API e estado persistido.
+- Os contadores de sincronizacao (`processados`, `inseridos`, `atualizados`, `removidos`) são calculados no mesmo contexto transacional das operacoes de escrita, reduzindo chance de divergencia entre retorno da API e estado persistido.
 - A invalidacao de cache da listagem (`ProductPriceCache::invalidate()`) acontece no `finally` do controller, garantindo refresh da versao mesmo quando a sincronizacao falha.
 
 #### Product-price listing

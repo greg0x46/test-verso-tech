@@ -1,0 +1,454 @@
+openapi: 3.0.3
+info:
+  title: Verso Tech Catalog API
+  version: 1.0.0
+  description: >
+    API para sincronizacao de produtos e precos normalizados e para
+    consulta paginada de produtos com seus precos.
+servers:
+  - url: http://localhost
+    description: Ambiente local (APP_PORT padrao 80)
+tags:
+  - name: Sincronizacao
+    description: Endpoints de sincronizacao para tabelas normalizadas.
+  - name: Catalogo
+    description: Endpoints de consulta do catalogo sincronizado.
+paths:
+  /api/sincronizar/produtos:
+    post:
+      tags:
+        - Sincronizacao
+      summary: Sincroniza produtos da origem para a tabela destino.
+      operationId: syncProducts
+      responses:
+        '200':
+          description: Sincronizacao de produtos executada com sucesso.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncResponse'
+              examples:
+                sucesso:
+                  value:
+                    message: Produtos sincronizados com sucesso.
+                    registros_processados: 10
+                    inseridos: 1
+                    atualizados: 1
+                    removidos: 1
+        '409':
+          description: Ja existe outra sincronizacao em andamento.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncResponse'
+              examples:
+                lock_ativo:
+                  value:
+                    message: Uma sincronizacao ja esta em andamento. Tente novamente em instantes.
+                    registros_processados: 0
+                    inseridos: 0
+                    atualizados: 0
+                    removidos: 0
+        '500':
+          description: Erro interno durante a sincronizacao.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncResponse'
+              examples:
+                erro_interno:
+                  value:
+                    message: Erro interno durante a sincronizacao.
+                    registros_processados: 0
+                    inseridos: 0
+                    atualizados: 0
+                    removidos: 0
+  /api/sincronizar/precos:
+    post:
+      tags:
+        - Sincronizacao
+      summary: Sincroniza precos da origem para a tabela destino.
+      operationId: syncPrices
+      responses:
+        '200':
+          description: Sincronizacao de precos executada com sucesso.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncResponse'
+              examples:
+                sucesso:
+                  value:
+                    message: Precos sincronizados com sucesso.
+                    registros_processados: 10
+                    inseridos: 1
+                    atualizados: 1
+                    removidos: 1
+        '409':
+          description: Ja existe outra sincronizacao em andamento.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncResponse'
+              examples:
+                lock_ativo:
+                  value:
+                    message: Uma sincronizacao ja esta em andamento. Tente novamente em instantes.
+                    registros_processados: 0
+                    inseridos: 0
+                    atualizados: 0
+                    removidos: 0
+        '500':
+          description: Erro interno durante a sincronizacao.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncResponse'
+              examples:
+                erro_interno:
+                  value:
+                    message: Erro interno durante a sincronizacao.
+                    registros_processados: 0
+                    inseridos: 0
+                    atualizados: 0
+                    removidos: 0
+  /api/produtos-precos:
+    get:
+      tags:
+        - Catalogo
+      summary: Lista produtos sincronizados com seus precos.
+      operationId: listProductPrices
+      parameters:
+        - in: query
+          name: page
+          required: false
+          description: Numero da pagina (minimo 1).
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - in: query
+          name: per_page
+          required: false
+          description: Quantidade de produtos por pagina (1 a 100).
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 15
+      responses:
+        '200':
+          description: Lista paginada de produtos com precos.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductPricePaginationResponse'
+        '422':
+          description: Parametros de paginacao invalidos.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginationValidationError'
+              examples:
+                invalidacao:
+                  value:
+                    message: Parametros de paginacao invalidos.
+                    errors:
+                      page:
+                        - The page field must be at least 1.
+                      per_page:
+                        - The per page field must not be greater than 100.
+components:
+  schemas:
+    SyncResponse:
+      type: object
+      required:
+        - message
+        - registros_processados
+        - inseridos
+        - atualizados
+        - removidos
+      properties:
+        message:
+          type: string
+        registros_processados:
+          type: integer
+          minimum: 0
+        inseridos:
+          type: integer
+          minimum: 0
+        atualizados:
+          type: integer
+          minimum: 0
+        removidos:
+          type: integer
+          minimum: 0
+    ProductPricePaginationResponse:
+      type: object
+      required:
+        - data
+        - links
+        - meta
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductPrice'
+        links:
+          $ref: '#/components/schemas/PaginationLinks'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+    PaginationLinks:
+      type: object
+      required:
+        - first
+        - last
+        - prev
+        - next
+      properties:
+        first:
+          type: string
+          nullable: true
+          example: http://localhost/api/produtos-precos?page=1
+        last:
+          type: string
+          nullable: true
+          example: http://localhost/api/produtos-precos?page=4
+        prev:
+          type: string
+          nullable: true
+          example: null
+        next:
+          type: string
+          nullable: true
+          example: http://localhost/api/produtos-precos?page=2
+    PaginationMeta:
+      type: object
+      required:
+        - current_page
+        - from
+        - last_page
+        - links
+        - path
+        - per_page
+        - to
+        - total
+      properties:
+        current_page:
+          type: integer
+          minimum: 1
+        from:
+          type: integer
+          nullable: true
+          minimum: 1
+        last_page:
+          type: integer
+          minimum: 1
+        links:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaginationMetaLink'
+        path:
+          type: string
+          example: http://localhost/api/produtos-precos
+        per_page:
+          type: integer
+          minimum: 1
+          maximum: 100
+        to:
+          type: integer
+          nullable: true
+          minimum: 1
+        total:
+          type: integer
+          minimum: 0
+    PaginationMetaLink:
+      type: object
+      required:
+        - url
+        - label
+        - active
+      properties:
+        url:
+          type: string
+          nullable: true
+          example: http://localhost/api/produtos-precos?page=2
+        label:
+          type: string
+          example: '2'
+        active:
+          type: boolean
+    ProductPrice:
+      type: object
+      required:
+        - id
+        - produto_origem_id
+        - codigo_produto
+        - created_at
+        - updated_at
+        - precos
+      properties:
+        id:
+          type: integer
+        produto_origem_id:
+          type: integer
+        codigo_produto:
+          type: string
+        nome_produto:
+          type: string
+          nullable: true
+        categoria:
+          type: string
+          nullable: true
+        subcategoria:
+          type: string
+          nullable: true
+        descricao:
+          type: string
+          nullable: true
+        fabricante:
+          type: string
+          nullable: true
+        modelo:
+          type: string
+          nullable: true
+        cor:
+          type: string
+          nullable: true
+        peso_gramas:
+          nullable: true
+          oneOf:
+            - type: number
+              format: float
+            - type: string
+        largura_cm:
+          nullable: true
+          oneOf:
+            - type: number
+              format: float
+            - type: string
+        altura_cm:
+          nullable: true
+          oneOf:
+            - type: number
+              format: float
+            - type: string
+        profundidade_cm:
+          nullable: true
+          oneOf:
+            - type: number
+              format: float
+            - type: string
+        unidade:
+          type: string
+          nullable: true
+        data_cadastro:
+          type: string
+          format: date
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        precos:
+          type: array
+          items:
+            $ref: '#/components/schemas/Price'
+    Price:
+      type: object
+      required:
+        - id
+        - preco_origem_id
+        - produto_insercao_id
+        - desconto_percentual
+        - acrescimo_percentual
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: integer
+        preco_origem_id:
+          type: integer
+        produto_insercao_id:
+          type: integer
+        valor:
+          nullable: true
+          oneOf:
+            - type: number
+              format: float
+            - type: string
+        moeda:
+          type: string
+          nullable: true
+        desconto_percentual:
+          oneOf:
+            - type: number
+              format: float
+            - type: string
+        acrescimo_percentual:
+          oneOf:
+            - type: number
+              format: float
+            - type: string
+        valor_promocional:
+          nullable: true
+          oneOf:
+            - type: number
+              format: float
+            - type: string
+        data_inicio_promocao:
+          type: string
+          format: date
+          nullable: true
+        data_fim_promocao:
+          type: string
+          format: date
+          nullable: true
+        data_atualizacao:
+          type: string
+          format: date
+          nullable: true
+        origem:
+          type: string
+          nullable: true
+        tipo_cliente:
+          type: string
+          nullable: true
+        vendedor_responsavel:
+          type: string
+          nullable: true
+        observacao:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    PaginationValidationError:
+      type: object
+      required:
+        - message
+        - errors
+      properties:
+        message:
+          type: string
+          example: Parametros de paginacao invalidos.
+        errors:
+          type: object
+          properties:
+            page:
+              type: array
+              items:
+                type: string
+            per_page:
+              type: array
+              items:
+                type: string
+          additionalProperties:
+            type: array
+            items:
+              type: string
