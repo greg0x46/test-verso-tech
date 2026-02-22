@@ -53,3 +53,11 @@ docker compose exec laravel.test php artisan migrate
   - **Eficiência**: Reduz o tempo e o risco envolvidos na conversão manual dos dados para seeders.
   - **Escalabilidade**: Em cenários reais, é comum lidar com grandes volumes de dados ou scripts legados, tornando inviável ou pouco prático convertê-los para seeders.
   - **Separação de responsabilidades pragmática**: Seeders são mais adequados para dados de aplicação, enquanto scripts SQL são mais apropriados para importar estruturas ou datasets base fornecidos externamente.
+
+#### Views and normalization
+
+- Em `database/migrations/2026_02_22_160000_create_normalized_product_and_price_views.php`, as views foram criadas para centralizar a transformacao dos dados no banco, conforme o requisito de usar SQL Views.
+- A `vw_produtos` concentra normalizacao de campos textuais, unidades e data de cadastro, alem de filtrar somente produtos ativos (`prod_atv = 1`).
+- A `ve_precos` normaliza moeda, valores e percentuais, aplica filtro de status ativo e faz `JOIN` com `vw_produtos` para manter consistencia entre preco ativo e produto ativo.
+- Em `app/Providers/AppServiceProvider.php`, a normalizacao de datas foi extraida para a funcao SQLite `normalize_date`, registrada no bootstrap da aplicacao via metodo dedicado chamado no `boot()`.
+- Essa decisao remove repeticao de `CASE` de data dentro das views e facilita manutencao das regras de formato de data em um unico ponto.
