@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+
+if [ "$SUPERVISOR_PHP_USER" != "root" ] && [ "$SUPERVISOR_PHP_USER" != "sail" ]; then
+    echo "You should set SUPERVISOR_PHP_USER to either 'sail' or 'root'."
+    exit 1
+fi
+
+if [ ! -z "$WWWUSER" ]; then
+    usermod -u $WWWUSER sail
+fi
+
+if [ ! -d /.composer ]; then
+    mkdir /.composer
+fi
+
+chmod -R ugo+rw /.composer
+
+if [ "$DB_CONNECTION" = "sqlite" ]; then
+    SQLITE_DB_PATH="${DB_DATABASE:-/var/www/html/database/database.sqlite}"
+
+    if [ "$SQLITE_DB_PATH" != ":memory:" ]; then
+        case "$SQLITE_DB_PATH" in
+            /*) ;;
+            *) SQLITE_DB_PATH="/var/www/html/$SQLITE_DB_PATH" ;;
+        esac
+
+        mkdir -p "$(dirname "$SQLITE_DB_PATH")"
+        touch "$SQLITE_DB_PATH"
+        chmod ug+rw "$SQLITE_DB_PATH" || true
+    fi
+fi
+
+if [ $# -gt 0 ]; then
+    if [ "$SUPERVISOR_PHP_USER" = "root" ]; then
+        exec "$@"
+    else
+        exec gosu $WWWUSER "$@"
+    fi
+else
+    exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf
+fi
