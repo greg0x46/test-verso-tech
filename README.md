@@ -19,7 +19,7 @@ WWWGROUP=1000
 
 3. Instale as dependencias:
 ```bash
-docker compose run --rm --build laravel.test composer install
+docker compose run --rm --build verso.test composer install
 ```
 
 4. Suba o ambiente:
@@ -29,14 +29,14 @@ docker compose up -d
 
 5. Gere a chave da aplicacao:
 ```bash
-docker compose exec laravel.test php artisan key:generate
+docker compose exec verso.test php artisan key:generate
 ```
 
 6. Rode as migrations:
 ```bash
-docker compose exec laravel.test php artisan migrate
+docker compose exec verso.test php artisan migrate
 ```
-docker compose restart laravel.test
+docker compose restart verso.test
 ## Documentacao da API
 
 - OpenAPI (arquivo): [`public/openapi.yaml`](public/openapi.yaml)
@@ -56,7 +56,7 @@ Embora em cenários reais esse tipo de operação seja tipicamente executado de 
 Reset do banco:
 
 ```bash
-docker compose exec -u sail laravel.test php artisan migrate:fresh --force
+docker compose exec -u sail verso.test php artisan migrate:fresh --force
 ```
 
 Executar baseline:
@@ -69,7 +69,7 @@ curl -X POST http://localhost/api/sincronizar/precos
 Gerar carga de stress:
 
 ```bash
-docker compose exec -u sail laravel.test php artisan base:gerar-alteracoes-sync --perfil=stress
+docker compose exec -u sail verso.test php artisan base:gerar-alteracoes-sync --perfil=stress
 ```
 
 Executar sincronização após cada geração de carga:
