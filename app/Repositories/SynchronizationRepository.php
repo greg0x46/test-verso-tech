@@ -6,6 +6,10 @@ use Illuminate\Support\Facades\DB;
 
 class SynchronizationRepository
 {
+    private const TEMP_PRODUCT_SOURCE_TABLE = 'temp_sync_products_source';
+
+    private const TEMP_PRICE_SOURCE_TABLE = 'temp_sync_prices_source';
+
     /**
      * @return array{processed:int, inserted:int, updated:int, deleted:int}
      */
@@ -46,49 +50,52 @@ class SynchronizationRepository
             OR produto_insercao.data_cadastro IS NOT excluded.data_cadastro
         SQL;
 
-        return DB::transaction(function () use ($sourceSql, $sourceDifferenceSql, $upsertDifferenceSql): array {
-            $sourceQuery = DB::query()->fromSub($sourceSql, 'src');
+        $this->prepareProductSourceTable($sourceSql);
 
-            $processed = (clone $sourceQuery)->count();
+        try {
+            return DB::transaction(function () use ($sourceDifferenceSql, $upsertDifferenceSql): array {
+                $sourceQuery = DB::table(self::TEMP_PRODUCT_SOURCE_TABLE.' AS src');
 
-            $inserted = (clone $sourceQuery)
-                ->leftJoin('produto_insercao AS pi', 'pi.codigo_produto', '=', 'src.codigo_produto')
-                ->whereNull('pi.codigo_produto')
-                ->count();
+                $processed = (clone $sourceQuery)->count();
 
-            $updated = (clone $sourceQuery)
-                ->join('produto_insercao AS pi', 'pi.codigo_produto', '=', 'src.codigo_produto')
-                ->whereRaw($sourceDifferenceSql)
-                ->count();
+                $inserted = (clone $sourceQuery)
+                    ->leftJoin('produto_insercao AS pi', 'pi.codigo_produto', '=', 'src.codigo_produto')
+                    ->whereNull('pi.codigo_produto')
+                    ->count();
 
-            $staleProductCodesQuery = DB::table('produto_insercao AS pi')
-                ->leftJoinSub($sourceSql, 'src', function ($join): void {
-                    $join->on('src.codigo_produto', '=', 'pi.codigo_produto');
-                })
-                ->whereNull('src.codigo_produto')
-                ->select('pi.codigo_produto');
+                $updated = (clone $sourceQuery)
+                    ->join('produto_insercao AS pi', 'pi.codigo_produto', '=', 'src.codigo_produto')
+                    ->whereRaw($sourceDifferenceSql)
+                    ->count();
 
-            $deleted = (clone $staleProductCodesQuery)->count();
+                $staleProductCodesQuery = DB::table('produto_insercao AS pi')
+                    ->leftJoin(self::TEMP_PRODUCT_SOURCE_TABLE.' AS src', function ($join): void {
+                        $join->on('src.codigo_produto', '=', 'pi.codigo_produto');
+                    })
+                    ->whereNull('src.codigo_produto')
+                    ->select('pi.codigo_produto');
 
-            DB::table('produto_insercao')
-                ->whereIn('codigo_produto', $staleProductCodesQuery)
-                ->delete();
+                $deleted = (clone $staleProductCodesQuery)->count();
 
-            DB::statement(<<<SQL
+                DB::table('produto_insercao')
+                    ->whereIn('codigo_produto', $staleProductCodesQuery)
+                    ->delete();
+
+                DB::statement(<<<SQL
                 UPDATE produto_insercao
                 SET produto_origem_id = (
                     SELECT COALESCE(MAX(src.prod_id), 0)
-                    FROM ($sourceSql) src
+                    FROM temp_sync_products_source src
                 ) + id
                 WHERE codigo_produto IN (
                     SELECT src.codigo_produto
-                    FROM ($sourceSql) src
+                    FROM temp_sync_products_source src
                     INNER JOIN produto_insercao pi ON pi.codigo_produto = src.codigo_produto
                     WHERE CAST(pi.produto_origem_id AS INTEGER) IS NOT CAST(src.prod_id AS INTEGER)
                 )
             SQL);
 
-            DB::statement(<<<SQL
+                DB::statement(<<<SQL
                 INSERT INTO produto_insercao (
                     produto_origem_id,
                     codigo_produto,
@@ -126,7 +133,7 @@ class SynchronizationRepository
                     src.data_cadastro,
                     CURRENT_TIMESTAMP,
                     CURRENT_TIMESTAMP
-                FROM ($sourceSql) src
+                FROM temp_sync_products_source src
                 WHERE 1 = 1
                 ON CONFLICT(codigo_produto) DO UPDATE SET
                     produto_origem_id = excluded.produto_origem_id,
@@ -148,8 +155,11 @@ class SynchronizationRepository
                     $upsertDifferenceSql
             SQL);
 
-            return $this->syncStats($processed, $inserted, $updated, $deleted);
-        });
+                return $this->syncStats($processed, $inserted, $updated, $deleted);
+            });
+        } finally {
+            $this->dropTempTable(self::TEMP_PRODUCT_SOURCE_TABLE);
+        }
     }
 
     /**
@@ -190,35 +200,38 @@ class SynchronizationRepository
             OR preco_insercao.observacao IS NOT excluded.observacao
         SQL;
 
-        return DB::transaction(function () use ($sourceSql, $sourceDifferenceSql, $upsertDifferenceSql): array {
-            $sourceQuery = DB::query()->fromSub($sourceSql, 'src');
+        $this->preparePriceSourceTable($sourceSql);
 
-            $processed = (clone $sourceQuery)->count();
+        try {
+            return DB::transaction(function () use ($sourceDifferenceSql, $upsertDifferenceSql): array {
+                $sourceQuery = DB::table(self::TEMP_PRICE_SOURCE_TABLE.' AS src');
 
-            $inserted = (clone $sourceQuery)
-                ->leftJoin('preco_insercao AS pi', 'pi.preco_origem_id', '=', 'src.preco_origem_id')
-                ->whereNull('pi.preco_origem_id')
-                ->count();
+                $processed = (clone $sourceQuery)->count();
 
-            $updated = (clone $sourceQuery)
-                ->join('preco_insercao AS pi', 'pi.preco_origem_id', '=', 'src.preco_origem_id')
-                ->whereRaw($sourceDifferenceSql)
-                ->count();
+                $inserted = (clone $sourceQuery)
+                    ->leftJoin('preco_insercao AS pi', 'pi.preco_origem_id', '=', 'src.preco_origem_id')
+                    ->whereNull('pi.preco_origem_id')
+                    ->count();
 
-            $stalePriceOriginIdsQuery = DB::table('preco_insercao AS pi')
-                ->leftJoinSub($sourceSql, 'src', function ($join): void {
-                    $join->on('src.preco_origem_id', '=', 'pi.preco_origem_id');
-                })
-                ->whereNull('src.preco_origem_id')
-                ->select('pi.preco_origem_id');
+                $updated = (clone $sourceQuery)
+                    ->join('preco_insercao AS pi', 'pi.preco_origem_id', '=', 'src.preco_origem_id')
+                    ->whereRaw($sourceDifferenceSql)
+                    ->count();
 
-            $deleted = (clone $stalePriceOriginIdsQuery)->count();
+                $stalePriceOriginIdsQuery = DB::table('preco_insercao AS pi')
+                    ->leftJoin(self::TEMP_PRICE_SOURCE_TABLE.' AS src', function ($join): void {
+                        $join->on('src.preco_origem_id', '=', 'pi.preco_origem_id');
+                    })
+                    ->whereNull('src.preco_origem_id')
+                    ->select('pi.preco_origem_id');
 
-            DB::table('preco_insercao')
-                ->whereIn('preco_origem_id', $stalePriceOriginIdsQuery)
-                ->delete();
+                $deleted = (clone $stalePriceOriginIdsQuery)->count();
 
-            DB::statement(<<<SQL
+                DB::table('preco_insercao')
+                    ->whereIn('preco_origem_id', $stalePriceOriginIdsQuery)
+                    ->delete();
+
+                DB::statement(<<<SQL
                 INSERT INTO preco_insercao (
                     preco_origem_id,
                     produto_insercao_id,
@@ -254,7 +267,7 @@ class SynchronizationRepository
                     src.observacao,
                     CURRENT_TIMESTAMP,
                     CURRENT_TIMESTAMP
-                FROM ($sourceSql) src
+                FROM temp_sync_prices_source src
                 WHERE 1 = 1
                 ON CONFLICT(preco_origem_id) DO UPDATE SET
                     produto_insercao_id = excluded.produto_insercao_id,
@@ -275,8 +288,11 @@ class SynchronizationRepository
                     $upsertDifferenceSql
             SQL);
 
-            return $this->syncStats($processed, $inserted, $updated, $deleted);
-        });
+                return $this->syncStats($processed, $inserted, $updated, $deleted);
+            });
+        } finally {
+            $this->dropTempTable(self::TEMP_PRICE_SOURCE_TABLE);
+        }
     }
 
     /**
@@ -290,6 +306,47 @@ class SynchronizationRepository
             'updated' => $updated,
             'deleted' => $deleted,
         ];
+    }
+
+    private function prepareProductSourceTable(string $sourceSql): void
+    {
+        $this->recreateTempTable(self::TEMP_PRODUCT_SOURCE_TABLE, $sourceSql);
+
+        DB::statement(<<<'SQL'
+            CREATE INDEX IF NOT EXISTS idx_temp_sync_products_source_codigo
+            ON temp_sync_products_source (codigo_produto)
+        SQL);
+
+        DB::statement(<<<'SQL'
+            CREATE INDEX IF NOT EXISTS idx_temp_sync_products_source_prod_id
+            ON temp_sync_products_source (prod_id)
+        SQL);
+    }
+
+    private function preparePriceSourceTable(string $sourceSql): void
+    {
+        $this->recreateTempTable(self::TEMP_PRICE_SOURCE_TABLE, $sourceSql);
+
+        DB::statement(<<<'SQL'
+            CREATE INDEX IF NOT EXISTS idx_temp_sync_prices_source_preco_origem_id
+            ON temp_sync_prices_source (preco_origem_id)
+        SQL);
+
+        DB::statement(<<<'SQL'
+            CREATE INDEX IF NOT EXISTS idx_temp_sync_prices_source_produto_insercao_id
+            ON temp_sync_prices_source (produto_insercao_id)
+        SQL);
+    }
+
+    private function recreateTempTable(string $tableName, string $sourceSql): void
+    {
+        $this->dropTempTable($tableName);
+        DB::statement("CREATE TEMP TABLE {$tableName} AS {$sourceSql}");
+    }
+
+    private function dropTempTable(string $tableName): void
+    {
+        DB::statement("DROP TABLE IF EXISTS {$tableName}");
     }
 
     private function productSourceSql(): string

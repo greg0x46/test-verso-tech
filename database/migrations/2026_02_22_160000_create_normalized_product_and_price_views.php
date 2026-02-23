@@ -75,9 +75,9 @@ return new class extends Migration
                     UPPER(TRIM(prc_origem)) AS origem,
                     UPPER(TRIM(prc_tipo_cli)) AS tipo_cliente,
                     TRIM(REPLACE(REPLACE(REPLACE(prc_vend_resp, '  ', ' '), '  ', ' '), '  ', ' ')) AS vendedor_responsavel,
-                    NULLIF(TRIM(prc_obs), '') AS observacao,
-                    LOWER(TRIM(prc_status)) AS status
+                    NULLIF(TRIM(prc_obs), '') AS observacao
                 FROM precos_base
+                WHERE LOWER(TRIM(prc_status)) = 'ativo'
             ),
             precos_normalizados AS (
                 SELECT
@@ -104,10 +104,8 @@ return new class extends Migration
                     origem,
                     tipo_cliente,
                     vendedor_responsavel,
-                    observacao,
-                    status
+                    observacao
                 FROM precos_tratados
-                WHERE status = 'ativo'
             )
             SELECT
                 p.preco_id,

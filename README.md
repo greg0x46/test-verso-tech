@@ -5,9 +5,9 @@
 docker compose up -d --build
 ```
 
-2. Copie o arquivo de ambiente (via container):
+2. Copie o arquivo modelo de variáveis de ambiente:
 ```bash
-docker compose exec laravel.test cp .env.example .env
+cp .env.example .env
 ```
 
 3. (Opcional) Configure os IDs do host no `.env` (evita problemas de permissao em arquivos criados no container):
@@ -18,7 +18,7 @@ id -g
 
 Adicione os valores no `.env`:
 ```env
-WWWUSER=1000
+ =1000
 WWWGROUP=1000
 ```
 
@@ -47,6 +47,80 @@ docker compose exec laravel.test php artisan migrate
 - OpenAPI (arquivo): [`public/openapi.yaml`](public/openapi.yaml)
 - OpenAPI (servido pela aplicacao): [`/openapi.yaml`](/openapi.yaml)
 - ReDoc (pagina publica): [`/api/docs`](/api/docs)
+
+## Benchmark
+
+### Objetivo
+
+Avaliar a capacidade da API de sincronização em processar grandes volumes de dados e identificar os limites da abordagem síncrona atual.
+
+Embora em cenários reais esse tipo de operação seja tipicamente executado de forma assíncrona (ex.: via fila ou job scheduler), este benchmark mede o desempenho da implementação atual sob execução direta via HTTP.
+
+### Como reproduzir
+
+Reset do banco:
+
+```bash
+docker compose exec -u sail laravel.test php artisan migrate:fresh --force
+```
+
+Executar baseline:
+
+```bash
+curl -X POST http://localhost/api/sincronizar/produtos
+curl -X POST http://localhost/api/sincronizar/precos
+```
+
+Gerar carga de stress:
+
+```bash
+docker compose exec -u sail laravel.test php artisan base:gerar-alteracoes-sync --perfil=stress
+```
+
+Executar sincronização após cada geração de carga:
+
+```bash
+curl -X POST http://localhost/api/sincronizar/produtos
+curl -X POST http://localhost/api/sincronizar/precos
+```
+
+Repetir o processo conforme necessário para aumentar progressivamente o volume de dados.
+
+### Metodologia
+
+Foram executadas:
+
+- 1 rodada baseline com destino vazio
+- 3 rodadas de stress progressivo usando o perfil `stress`
+- Timeout setado em 30s
+
+Cada rodada mede:
+
+- tempo total de execução
+- número de registros processados
+- inserções, atualizações e remoções
+- throughput aproximado
+
+### Resultados
+
+| Rodada | Endpoint | Tempo | Registros processados | Inseridos | Atualizados | Removidos | Throughput |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Baseline | produtos | 0.0647 s | 10 | 10 | 0 | 0 | 154 registros/s |
+| Baseline | precos | 0.0281 s | 10 | 10 | 0 | 0 | 355 registros/s |
+| Stress #1 | produtos | 9.3761 s | 360.010 | 360.000 | 10 | 0 | ~38.4k registros/s |
+| Stress #1 | precos | 11.4158 s | 360.010 | 360.000 | 10 | 0 | ~31.5k registros/s |
+| Stress #2 | produtos | 21.2710 s | 680.010 | 360.000 | 79.990 | 40.000 | ~32.0k registros/s |
+| Stress #2 | precos | 23.1919 s | 640.010 | 360.000 | 79.990 | 40.000 | ~27.6k registros/s |
+| Stress #3 | produtos | 27.7430 s | 1.000.010 | 360.000 | 79.990 | 40.000 | ~36.0k registros/s |
+| Stress #3 | precos | 31.6157 s | n/a | n/a | n/a | n/a | timeout |
+
+### Análise
+
+Observações principais:
+
+- A sincronização de produtos processou aproximadamente 1 milhão de registros em 27.7 segundos, mantendo throughput médio de aproximadamente 35 mil registros por segundo.
+- O tempo de execução cresceu de forma aproximadamente linear com o aumento do volume, indicando boa escalabilidade da abordagem set-based.
+- A sincronização de preços excedeu o timeout na terceira rodada, evidenciando maior custo relativo devido à complexidade adicional de joins e consolidação.
 
 ## Decision Notes
 
@@ -90,6 +164,8 @@ docker compose exec laravel.test php artisan migrate
 
 - A sincronizacao foi implementada com operacoes SQL set-based em `app/Repositories/SynchronizationRepository.php`, reduzindo processamento em PHP e diminuindo round-trips entre aplicacao e banco.
 - A implementacao ficou mais verbosa que uma abordagem com `foreach + updateOrInsert`, mas essa complexidade e intencional por causa das regras de dominio e consistencia.
+- Para reduzir custo de varreduras repetidas na origem, a sincronizacao passou a materializar a fonte em tabelas temporarias (`temp_sync_products_source` e `temp_sync_prices_source`) com indices locais para joins/contagens/delete/upsert.
+- Essa materializacao temporaria removeu o gargalo principal de recalculo de CTE/subqueries em cada etapa do fluxo e reduziu substancialmente o tempo total por rodada.
 - Tradeoff da abordagem adotada:
   - **Mais complexidade de leitura**: as queries sao maiores e exigem mais cuidado de manutencao.
   - **Mais robustez em volume real**: evita N+1 queries (um loop com `exists/updateOrInsert` por linha), reduz lock churn e escala melhor.
@@ -111,6 +187,7 @@ docker compose exec laravel.test php artisan migrate
 - O controller tambem ganhou tratamento explicito de falhas de sincronizacao com retorno generico `500` e `report()` para observabilidade.
 - Os contadores de sincronizacao (`processados`, `inseridos`, `atualizados`, `removidos`) são calculados no mesmo contexto transacional das operacoes de escrita, reduzindo chance de divergencia entre retorno da API e estado persistido.
 - A invalidacao de cache da listagem (`ProductPriceCache::invalidate()`) acontece no `finally` do controller, garantindo refresh da versao mesmo quando a sincronizacao falha.
+- O comando de massa para benchmark (`base:gerar-alteracoes-sync`) ganhou perfis em ingles (`small|medium|large|stress`) e o perfil `stress` foi calibrado para provocar timeout proximo da 3a iteracao, permitindo testes de limite com menos rodadas.
 
 #### Product-price listing
 

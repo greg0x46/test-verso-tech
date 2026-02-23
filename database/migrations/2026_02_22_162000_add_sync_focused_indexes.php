@@ -22,7 +22,7 @@ return new class extends Migration
 
         DB::statement(<<<'SQL'
             CREATE INDEX IF NOT EXISTS idx_precos_base_sync_codigo_ativo
-            ON precos_base (UPPER(TRIM(prc_cod_prod)), preco_id)
+            ON precos_base (UPPER(TRIM(prc_cod_prod)))
             WHERE LOWER(TRIM(prc_status)) = 'ativo'
         SQL);
     }
