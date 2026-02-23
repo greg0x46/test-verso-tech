@@ -1,16 +1,11 @@
 ## Setup
 
-1. Suba o ambiente:
-```bash
-docker compose up -d --build
-```
-
-2. Copie o arquivo modelo de variáveis de ambiente:
+1. Copie o arquivo modelo de variáveis de ambiente:
 ```bash
 cp .env.example .env
 ```
 
-3. (Opcional) Configure os IDs do host no `.env` (evita problemas de permissao em arquivos criados no container):
+2. (Opcional) Configure os IDs do host no `.env` (evita problemas de permissao em arquivos criados no container):
 ```bash
 id -u
 id -g
@@ -18,18 +13,18 @@ id -g
 
 Adicione os valores no `.env`:
 ```env
- =1000
+WWWUSER=1000
 WWWGROUP=1000
 ```
 
-Se alterar esses valores, recrie o container para aplicar:
+3. Instale as dependencias:
 ```bash
-docker compose up -d --build --force-recreate
+docker compose run --rm --build laravel.test composer install
 ```
 
-4. Instale dependencias (caso ainda nao tenha feito):
+4. Suba o ambiente:
 ```bash
-docker compose exec laravel.test composer install
+docker compose up -d
 ```
 
 5. Gere a chave da aplicacao:
@@ -41,7 +36,7 @@ docker compose exec laravel.test php artisan key:generate
 ```bash
 docker compose exec laravel.test php artisan migrate
 ```
-
+docker compose restart laravel.test
 ## Documentacao da API
 
 - OpenAPI (arquivo): [`public/openapi.yaml`](public/openapi.yaml)
